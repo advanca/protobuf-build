@@ -108,6 +108,53 @@ impl Builder {
         self.replace_read_unknown_fields();
     }
 
+    pub fn generate_files_no_grpcio(&self) {
+        let mut cmd = Command::new(get_protoc());
+        let desc_file = format!("{}/mod.desc", self.out_dir);
+        for i in &self.includes {
+            cmd.arg(format!("-I{}", i));
+        }
+        cmd.arg("--include_imports")
+            .arg("--include_source_info")
+            .arg("-o")
+            .arg(&desc_file);
+        for f in &self.files {
+            cmd.arg(f);
+        }
+        println!("executing {:?}", cmd);
+        match cmd.status() {
+            Ok(e) if e.success() => {}
+            e => panic!("failed to generate descriptor set files: {:?}", e),
+        }
+
+        let desc_bytes = std::fs::read(&desc_file).unwrap();
+        let desc: protobuf::descriptor::FileDescriptorSet =
+            protobuf::parse_from_bytes(&desc_bytes).unwrap();
+        let mut files_to_generate = Vec::new();
+        'outer: for file in &self.files {
+            for include in &self.includes {
+                if let Ok(truncated) = Path::new(file).strip_prefix(include) {
+                    files_to_generate.push(format!("{}", truncated.display()));
+                    continue 'outer;
+                }
+            }
+
+            panic!(
+                "file {:?} is not found in includes {:?}",
+                file, self.includes
+            );
+        }
+
+        protobuf_codegen::gen_and_write(
+            desc.get_file(),
+            &files_to_generate,
+            &Path::new(&self.out_dir),
+            &protobuf_codegen::Customize::default(),
+        )
+        .unwrap();
+        self.replace_read_unknown_fields();
+    }
+
     /// Convert protobuf files to use the old way of reading protobuf enums.
     // FIXME: Remove this once stepancheg/rust-protobuf#233 is resolved.
     fn replace_read_unknown_fields(&self) {
