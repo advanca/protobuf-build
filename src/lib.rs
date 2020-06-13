@@ -57,6 +57,13 @@ impl Builder {
         self.generate_mod_file();
     }
 
+    pub fn generate_no_grpcio(&self) {
+        assert!(!self.files.is_empty(), "No files specified for generation");
+        self.prep_out_dir();
+        self.generate_files_no_grpcio();
+        self.generate_mod_file();
+    }
+
     /// This option is only used when generating Prost code. Otherwise, it is
     /// silently ignored.
     pub fn wrapper_options(&mut self, wrapper_opts: GenOpt) -> &mut Self {
